@@ -10,7 +10,7 @@ import UIKit
 
 class ToDoListViewController: UITableViewController {
 
-    let itemArray = ["Get Money", "Get Paper", "Acquire Currency"]
+    var itemArray = [String]()
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -51,6 +51,44 @@ class ToDoListViewController: UITableViewController {
         
     }
     
-
+    //MARK - Add New Items
+    
+    @IBAction func addButtonPressed(_ sender: UIBarButtonItem) {
+        //Store added item details into the local variable
+        var addItemField = UITextField()
+        
+        //Add an alert
+        let alert = UIAlertController(title: "Add New Item", message: "", preferredStyle: .alert)
+        
+        //Create an action that does something when pressed
+        let action = UIAlertAction(title: "Add Item", style: .default, handler: { (action) in
+            //What happens when the user clicks the add item button on the alert
+            self.itemArray.append(addItemField.text!)
+            self.tableView.reloadData()
+            
+            //Reloads the table
+        })
+        
+        //Create a second action called cancel that dismisses the alert
+        let cancel = UIAlertAction(title: "Cancel", style: .cancel) { (action) in
+            
+        }
+        
+        //Add a text field in the alert. When the add item action button is pressed, the string
+        //In the text field will be stored into the local var addItemField. Then the action
+        //Will print the contents of the addItemField
+        alert.addTextField { (alertTextField) in
+            alertTextField.placeholder = "Create new item"
+            addItemField = alertTextField
+        }
+        
+        //Add the actions to the alert
+        alert.addAction(cancel)
+        alert.addAction(action)
+        
+        //Show the alert
+        present(alert, animated: true, completion: nil)
+    }
+    
 }
 
