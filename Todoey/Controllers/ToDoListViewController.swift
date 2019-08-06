@@ -12,35 +12,27 @@ class ToDoListViewController: UITableViewController {
 
     var itemArray = [Item]()
     
-    let defaults = UserDefaults.standard
+    //Path to the documents in the iPhone
+    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-    let newItem = Item(itemName: "Sausage", itemChecked: false)
-    itemArray.append(newItem)
+        //Call load items. This will fill the list with already saved items
+        loadItems()
         
-    let newItem2 = Item(itemName: "Milk", itemChecked: false)
-    itemArray.append(newItem2)
-        
-    if let items = defaults.array(forKey: "TodoListArray") as? [Item]
-    {
-        itemArray = items
         }
-
-        // Do any additional setup after loading the view.
-    }
     
     //MARK - Tableview Datasource Methods
     
     //This function populates the table view
-    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell
+    {
         //Reference prototype cell
         let cell = tableView.dequeueReusableCell(withIdentifier: "ToDoItemCell", for: indexPath)
         
         let item = itemArray[indexPath.row]
-        
-        
+
         //Set cell label to array value
         cell.textLabel?.text = item.itemName
         
@@ -63,16 +55,13 @@ class ToDoListViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         //Check for checkmark, if no checkmark, set itemChecked value to true
         //Checks for the opposite of the current value and assigns it to that
-        
         itemArray[indexPath.row].itemChecked = !itemArray[indexPath.row].itemChecked
+        
+        //Call saveItems() which will write the new data to the plist file and update the view
+        saveItems()
         
         //Animate the selected cell row to flash 
         tableView.deselectRow(at: indexPath, animated: true)
-        
-        //Reload the tableview so the check mark values reload and the cellForRowAt method gets triggered
-        tableView.reloadData()
-        
-        
     }
     
     //MARK - Add New Items
@@ -91,11 +80,7 @@ class ToDoListViewController: UITableViewController {
             
             self.itemArray.append(newItem)
             
-            self.defaults.set(self.itemArray, forKey: "TodoListArray")
-            
-            self.tableView.reloadData()
-            
-            //Reloads the table
+            self.saveItems()
         })
         
         //Create a second action called cancel that dismisses the alert
@@ -119,5 +104,44 @@ class ToDoListViewController: UITableViewController {
         present(alert, animated: true, completion: nil)
     }
     
+    func saveItems()
+    {
+        //The encoder will convert objects and their properties into a plist file, or a JSON file
+        let encoder = PropertyListEncoder()
+        
+        do
+        {
+            //Try to encode the itemArray data
+            let data = try encoder.encode(itemArray)
+            //Then try to write the data to the specified path where the documents are
+            try data.write(to: dataFilePath!)
+        }
+        catch
+        {
+            print("error encoding item array \(error)")
+        }
+        
+        //Reload the data so the new data appears
+        self.tableView.reloadData()
+    }
+    
+    func loadItems()
+    {
+        //Try to find the data through the URL path
+        if let data = try? Data(contentsOf: dataFilePath!)
+        {
+            //Initialize the decoder. This will convert the plist data back into usable data
+            let decoder = PropertyListDecoder()
+            do
+            {
+            //Try to set the itemArray to the decoded values from the plist
+            itemArray = try decoder.decode([Item].self, from: data)
+            }
+            catch
+            {
+                print("Couldnt load data \(error)")
+            }
+        }
+    }
 }
 

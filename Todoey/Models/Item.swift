@@ -7,8 +7,9 @@
 //
 
 import Foundation
-
-class Item
+//Make the class of type Encodable and Decodable so it can be written to the plist
+//The class can only have primitive data types
+class Item: Codable
 {
     var itemName : String = ""
     var itemChecked : Bool = false
