@@ -7,17 +7,24 @@
 //
 
 import UIKit
-
-class ToDoListViewController: UITableViewController {
-
-    var itemArray = [Item]()
+import CoreData
+class ToDoListViewController: UITableViewController
+{
+    @IBOutlet weak var searchBar: UISearchBar!
     
-    //Path to the documents in the iPhone
-    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
+    var itemArray = [Item]()
+    //This line of code uses UIApplication to access the current app that is running, then it takes its delegate
+    //(Which is the AppDelegate.swift file) and downcasts it into an AppDelegate type.=
+    //After the AppDelegate file is found it then finds the viewContext within the persistent Container
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+    
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        searchBar.delegate = self
+        
+        print(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask))
         //Call load items. This will fill the list with already saved items
         loadItems()
         
@@ -34,12 +41,12 @@ class ToDoListViewController: UITableViewController {
         let item = itemArray[indexPath.row]
 
         //Set cell label to array value
-        cell.textLabel?.text = item.itemName
+        cell.textLabel?.text = item.title
         
         //Check to see if the item in the array is checked or not, if it is marked true, assign a checkmark
         //Ternary operator ---->
         //value = condition ? valueIfTrue : valueIfFalse
-        cell.accessoryType = item.itemChecked ? .checkmark : .none
+        cell.accessoryType = item.done ? .checkmark : .none
         
         return cell
     }
@@ -55,9 +62,9 @@ class ToDoListViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         //Check for checkmark, if no checkmark, set itemChecked value to true
         //Checks for the opposite of the current value and assigns it to that
-        itemArray[indexPath.row].itemChecked = !itemArray[indexPath.row].itemChecked
+        itemArray[indexPath.row].done = !itemArray[indexPath.row].done
         
-        //Call saveItems() which will write the new data to the plist file and update the view
+        //Call saveItems() which will commit the data out of the context and into the database
         saveItems()
         
         //Animate the selected cell row to flash 
@@ -76,7 +83,13 @@ class ToDoListViewController: UITableViewController {
         //Create an action that does something when pressed
         let action = UIAlertAction(title: "Add Item", style: .default, handler: { (action) in
             //What happens when the user clicks the add item button on the alert
-            let newItem = Item(itemName: addItemField.text!, itemChecked: false)
+            //Uses the context before it can upload the data to the database
+            //Context is where you can edit the data before submission
+            let newItem = Item(context: self.context)
+            
+            newItem.title = addItemField.text!
+            
+            newItem.done = false
             
             self.itemArray.append(newItem)
             
@@ -106,40 +119,68 @@ class ToDoListViewController: UITableViewController {
     
     func saveItems()
     {
-        //The encoder will convert objects and their properties into a plist file, or a JSON file
-        let encoder = PropertyListEncoder()
-        
         do
         {
-            //Try to encode the itemArray data
-            let data = try encoder.encode(itemArray)
-            //Then try to write the data to the specified path where the documents are
-            try data.write(to: dataFilePath!)
+            try context.save()
         }
         catch
         {
-            print("error encoding item array \(error)")
+           print("Error saving context \(error)")
         }
         
         //Reload the data so the new data appears
         self.tableView.reloadData()
     }
     
-    func loadItems()
+    func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest())
     {
-        //Try to find the data through the URL path
-        if let data = try? Data(contentsOf: dataFilePath!)
+        // set a constant of type NSFetchRequest<Item> equal to the Item database model's fetch request
+        do
         {
-            //Initialize the decoder. This will convert the plist data back into usable data
-            let decoder = PropertyListDecoder()
-            do
-            {
-            //Try to set the itemArray to the decoded values from the plist
-            itemArray = try decoder.decode([Item].self, from: data)
-            }
-            catch
-            {
-                print("Couldnt load data \(error)")
+        //Try to populate the array by fetching the data through the context
+        itemArray = try context.fetch(request)
+        }
+        catch
+        {
+            print("Error fetching data from context \(error)")
+        }
+        tableView.reloadData()
+    }
+    
+}
+
+extension ToDoListViewController: UISearchBarDelegate
+{
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        //Make another request for data
+        let request : NSFetchRequest<Item> = Item.fetchRequest()
+        //The predicate will be what we are telling the searchbar to search for.
+        //Checks if the title from the Item database contains what the user entered in the search bar
+        //the format is written in SQL code. The cd after contains means it is not case sensitive
+        
+        request.predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
+        //Create a sort descriptor. This makes the results of the search sorted in ascending order
+        let sortDescriptor = NSSortDescriptor(key: "title", ascending: true)
+        //Set the requests sortDescriptors property to the sortDescriptor we created
+        //Must be in an array even if it is just on descriptor
+        request.sortDescriptors = [sortDescriptor]
+        //Call loadItems with the new request. This will replace the default request value.
+        loadItems(with: request)
+    }
+    
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        if (searchBar.text?.count == 0)
+        {
+            //Call loaditems when the search bar changes to 0 characters. This will display
+            //The full list of items again
+            loadItems()
+            //This line of code goes into the main thread and stops the keyboard from being displayed
+            //As well as stops the search bar from being selected
+            //We have to tap into the main thread because this all takes plae in a background thread.
+            //Doing this from the background would be laggy.
+            DispatchQueue.main.async {
+                //Run this method on the main thread queue
+                searchBar.resignFirstResponder()
             }
         }
     }
