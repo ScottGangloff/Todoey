@@ -13,6 +13,16 @@ class ToDoListViewController: UITableViewController
     @IBOutlet weak var searchBar: UISearchBar!
     
     var itemArray = [Item]()
+    
+    //When this variable is set through the previous VC, then it will load the according items
+    //This var is the category that was clicked by the user in the CategoryViewController
+    var selectedCategory : Category?
+    {
+        didSet
+        {
+            loadItems()
+        }
+    }
     //This line of code uses UIApplication to access the current app that is running, then it takes its delegate
     //(Which is the AppDelegate.swift file) and downcasts it into an AppDelegate type.=
     //After the AppDelegate file is found it then finds the viewContext within the persistent Container
@@ -25,8 +35,6 @@ class ToDoListViewController: UITableViewController
         searchBar.delegate = self
         
         print(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask))
-        //Call load items. This will fill the list with already saved items
-        loadItems()
         
         }
     
@@ -91,6 +99,8 @@ class ToDoListViewController: UITableViewController
             
             newItem.done = false
             
+            newItem.parentCategory = self.selectedCategory
+            
             self.itemArray.append(newItem)
             
             self.saveItems()
@@ -103,7 +113,7 @@ class ToDoListViewController: UITableViewController
         
         //Add a text field in the alert. When the add item action button is pressed, the string
         //In the text field will be stored into the local var addItemField. Then the action
-        //Will print the contents of the addItemField
+        //Will assign the value to the addItemField text field
         alert.addTextField { (alertTextField) in
             alertTextField.placeholder = "Create new item"
             addItemField = alertTextField
@@ -132,8 +142,26 @@ class ToDoListViewController: UITableViewController
         self.tableView.reloadData()
     }
     
-    func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest())
+    func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest(), searchPredicate: NSPredicate? = nil)
     {
+        //Create a filter that says if the Item's parent category name MATCHES the name of the passed in category, display the information
+        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@",
+                                    selectedCategory!.name!)
+        
+        //This following optional chaining creates a new predicate to see if the searchPredicate is nil.
+        //If it is NOT nil, it sets the request's predicate to a compounded predicate of both the categoryPredicate and the new predicate
+        //If it IS nil, it sets the request's predicate to just the category predicate.
+        //SUMMARISED: If there is a search filter, it will be added to the request along with the default filter.
+        //If there is not a search filter, just the default category filter will be applied to the results
+        
+        if let additionalPredicate = searchPredicate
+        {
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, additionalPredicate])
+        }
+        else
+        {
+            request.predicate = categoryPredicate
+        }
         // set a constant of type NSFetchRequest<Item> equal to the Item database model's fetch request
         do
         {
@@ -158,14 +186,14 @@ extension ToDoListViewController: UISearchBarDelegate
         //Checks if the title from the Item database contains what the user entered in the search bar
         //the format is written in SQL code. The cd after contains means it is not case sensitive
         
-        request.predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
+        let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
         //Create a sort descriptor. This makes the results of the search sorted in ascending order
         let sortDescriptor = NSSortDescriptor(key: "title", ascending: true)
         //Set the requests sortDescriptors property to the sortDescriptor we created
         //Must be in an array even if it is just on descriptor
         request.sortDescriptors = [sortDescriptor]
         //Call loadItems with the new request. This will replace the default request value.
-        loadItems(with: request)
+        loadItems(with: request, searchPredicate: predicate)
     }
     
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
