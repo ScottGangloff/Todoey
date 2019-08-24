@@ -7,13 +7,18 @@
 //
 
 import UIKit
-import CoreData
+//import CoreData
+import RealmSwift
 
 class CategoryViewController: UITableViewController {
 
-    var categoryArray = [Category]()
+    let realm = try! Realm()
     
-    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+    //Is of type result because it will be filled from the Realm database
+    //It is a container of all of the categories. Similar to an array, but is auto updated and used with Realm only.
+    var todoCategories : Results<Category>?
+    
+    
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -27,24 +32,26 @@ class CategoryViewController: UITableViewController {
         
         let cell = tableView.dequeueReusableCell(withIdentifier: "CategoryCell", for: indexPath)
         
-        let category = categoryArray[indexPath.row]
-        
-        cell.textLabel?.text = category.name!
+        //If the todoCategories is not nil, get the name of the category. If it is nil, say no categories added
+        cell.textLabel?.text = todoCategories?[indexPath.row].name ?? "No Categories Added"
         
         return cell
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return categoryArray.count
+        return todoCategories?.count ?? 1
+        //If todoCategories is not nil, return count. If it is nil, return 1
     }
     
     //MARK: - TableView Manipulation Methods
     
-    func saveCategories()
+    func save(category: Category)
     {
         do
         {
-            try context.save()
+            try realm.write {
+                realm.add(category)
+            }
         }
         catch
         {
@@ -55,18 +62,12 @@ class CategoryViewController: UITableViewController {
         self.tableView.reloadData()
     }
     
-    func loadCategories(with request: NSFetchRequest<Category> = Category.fetchRequest())
+    func loadCategories()
     {
-        // set a constant of type NSFetchRequest<Item> equal to the Item database model's fetch request
-        do
-        {
-            //Try to populate the array by fetching the data through the context
-            categoryArray = try context.fetch(request)
-        }
-        catch
-        {
-            print("Error fetching data from context \(error)")
-        }
+        //Assign the category array (Which has to be of type result) to the result of the realm query
+        //todoCategories will now be set to auto update 
+         todoCategories = realm.objects(Category.self)
+        
         tableView.reloadData()
     }
     
@@ -80,13 +81,15 @@ class CategoryViewController: UITableViewController {
         
         let action = UIAlertAction(title: "Add a category", style: .default) { (action) in
             
-            let newCategory = Category(context: self.context)
+            let newCategory = Category()
             
             newCategory.name = addButtonField.text!
             
-            self.categoryArray.append(newCategory)
+            //because the Category Array is auto-updating, you never have to append things to it
+            //It is done automatically and monitors itself for the changes done to the added object
             
-            self.saveCategories()
+            //This line commits the category to the database
+            self.save(category: newCategory)
         }
         
         let cancel = UIAlertAction(title: "Cancel", style: .cancel) { (action) in
@@ -119,7 +122,8 @@ class CategoryViewController: UITableViewController {
         
         if let indexPath = tableView.indexPathForSelectedRow
         {
-            destinationVC.selectedCategory = categoryArray[indexPath.row]
+            //The selected category of the destination View Controller will be the selected category if it is not nil
+            destinationVC.selectedCategory = todoCategories?[indexPath.row]
         }
     }
 }

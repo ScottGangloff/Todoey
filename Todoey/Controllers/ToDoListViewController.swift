@@ -8,31 +8,30 @@
 
 import UIKit
 import CoreData
+import RealmSwift
+
 class ToDoListViewController: UITableViewController
 {
     @IBOutlet weak var searchBar: UISearchBar!
     
-    var itemArray = [Item]()
-    
+    var todoItems : Results<Item>?
+    let realm = try! Realm()
+    //We pass in the category that was selected so that we can save the newly created items to that
+    //category's item list!
     //When this variable is set through the previous VC, then it will load the according items
-    //This var is the category that was clicked by the user in the CategoryViewController
     var selectedCategory : Category?
     {
         didSet
         {
-            loadItems()
+           loadItems()
         }
     }
-    //This line of code uses UIApplication to access the current app that is running, then it takes its delegate
-    //(Which is the AppDelegate.swift file) and downcasts it into an AppDelegate type.=
-    //After the AppDelegate file is found it then finds the viewContext within the persistent Container
-    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
-    
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
         searchBar.delegate = self
+        loadItems()
+        //searchBar.delegate = self
         
         print(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask))
         
@@ -46,37 +45,54 @@ class ToDoListViewController: UITableViewController
         //Reference prototype cell
         let cell = tableView.dequeueReusableCell(withIdentifier: "ToDoItemCell", for: indexPath)
         
-        let item = itemArray[indexPath.row]
+        //If the item is not nil....
+        if let item = todoItems?[indexPath.row]
+        {
+            //Set cell label to array value
+            cell.textLabel?.text = item.title
+            
+            //Check to see if the item in the array is checked or not, if it is marked true, assign a checkmark
+            //Ternary operator ---->
+            //value = condition ? valueIfTrue : valueIfFalse
+            cell.accessoryType = item.done ? .checkmark : .none
+        }
+        else
+        {
+         cell.textLabel?.text = "No Items added"
+        }
 
-        //Set cell label to array value
-        cell.textLabel?.text = item.title
-        
-        //Check to see if the item in the array is checked or not, if it is marked true, assign a checkmark
-        //Ternary operator ---->
-        //value = condition ? valueIfTrue : valueIfFalse
-        cell.accessoryType = item.done ? .checkmark : .none
-        
         return cell
     }
     
     //How many rows the tableView shall contain
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return itemArray.count
+        return todoItems?.count ?? 1
     }
-    
     //MARK - Tableview Delegate Methods
     
     //Whenever a cell in the table view is selected this is called
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        //Check for checkmark, if no checkmark, set itemChecked value to true
-        //Checks for the opposite of the current value and assigns it to that
-        itemArray[indexPath.row].done = !itemArray[indexPath.row].done
-        
-        //Call saveItems() which will commit the data out of the context and into the database
-        saveItems()
+        //Check to see if the item clicked is nil or not
+        //If it is not nil, execute following block
+        if let item = todoItems?[indexPath.row]
+        {
+            do
+            {
+            try realm.write {
+                //Make check mark boolean opposite of the current value when clicked
+                item.done = !item.done
+            }
+            }
+            catch
+            {
+                print("Error saving done status")
+            }
+        }
         
         //Animate the selected cell row to flash 
         tableView.deselectRow(at: indexPath, animated: true)
+        
+        tableView.reloadData()
     }
     
     //MARK - Add New Items
@@ -91,19 +107,28 @@ class ToDoListViewController: UITableViewController
         //Create an action that does something when pressed
         let action = UIAlertAction(title: "Add Item", style: .default, handler: { (action) in
             //What happens when the user clicks the add item button on the alert
-            //Uses the context before it can upload the data to the database
-            //Context is where you can edit the data before submission
-            let newItem = Item(context: self.context)
+            //If the category passed in is NOT nil, write a new item to the category's list
+            if let currentCategory = self.selectedCategory
+            {
+                do
+                {
+                try self.realm.write
+                    {
+                    let newItem = Item()
+                    newItem.title = addItemField.text!
+                    newItem.dateCreated = Date()
+                    //Add the item to the current category's list of items
+                    currentCategory.items.append(newItem)
+                    }
+                }
+                catch
+                {
+                    print("Error saving new items")
+                }
+            }
+                
             
-            newItem.title = addItemField.text!
-            
-            newItem.done = false
-            
-            newItem.parentCategory = self.selectedCategory
-            
-            self.itemArray.append(newItem)
-            
-            self.saveItems()
+            self.tableView.reloadData()
         })
         
         //Create a second action called cancel that dismisses the alert
@@ -127,85 +152,32 @@ class ToDoListViewController: UITableViewController
         present(alert, animated: true, completion: nil)
     }
     
-    func saveItems()
-    {
-        do
-        {
-            try context.save()
-        }
-        catch
-        {
-           print("Error saving context \(error)")
-        }
-        
-        //Reload the data so the new data appears
-        self.tableView.reloadData()
-    }
     
-    func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest(), searchPredicate: NSPredicate? = nil)
+    
+    func loadItems()
     {
-        //Create a filter that says if the Item's parent category name MATCHES the name of the passed in category, display the information
-        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@",
-                                    selectedCategory!.name!)
-        
-        //This following optional chaining creates a new predicate to see if the searchPredicate is nil.
-        //If it is NOT nil, it sets the request's predicate to a compounded predicate of both the categoryPredicate and the new predicate
-        //If it IS nil, it sets the request's predicate to just the category predicate.
-        //SUMMARISED: If there is a search filter, it will be added to the request along with the default filter.
-        //If there is not a search filter, just the default category filter will be applied to the results
-        
-        if let additionalPredicate = searchPredicate
-        {
-            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, additionalPredicate])
-        }
-        else
-        {
-            request.predicate = categoryPredicate
-        }
-        // set a constant of type NSFetchRequest<Item> equal to the Item database model's fetch request
-        do
-        {
-        //Try to populate the array by fetching the data through the context
-        itemArray = try context.fetch(request)
-        }
-        catch
-        {
-            print("Error fetching data from context \(error)")
-        }
+        todoItems = selectedCategory?.items.sorted(byKeyPath: "title", ascending: true)
         tableView.reloadData()
     }
-    
+
 }
 
 extension ToDoListViewController: UISearchBarDelegate
 {
     func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
-        //Make another request for data
-        let request : NSFetchRequest<Item> = Item.fetchRequest()
-        //The predicate will be what we are telling the searchbar to search for.
-        //Checks if the title from the Item database contains what the user entered in the search bar
-        //the format is written in SQL code. The cd after contains means it is not case sensitive
         
-        let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
-        //Create a sort descriptor. This makes the results of the search sorted in ascending order
-        let sortDescriptor = NSSortDescriptor(key: "title", ascending: true)
-        //Set the requests sortDescriptors property to the sortDescriptor we created
-        //Must be in an array even if it is just on descriptor
-        request.sortDescriptors = [sortDescriptor]
-        //Call loadItems with the new request. This will replace the default request value.
-        loadItems(with: request, searchPredicate: predicate)
+        todoItems = todoItems?.filter("title CONTAINS[cd] %@", searchBar.text!).sorted(byKeyPath: "dateCreated", ascending: true)
+        
+        tableView.reloadData()
+        
     }
-    
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
         if (searchBar.text?.count == 0)
         {
             //Call loaditems when the search bar changes to 0 characters. This will display
             //The full list of items again
             loadItems()
-            //This line of code goes into the main thread and stops the keyboard from being displayed
-            //As well as stops the search bar from being selected
-            //We have to tap into the main thread because this all takes plae in a background thread.
-            //Doing this from the background would be laggy.
+            
             DispatchQueue.main.async {
                 //Run this method on the main thread queue
                 searchBar.resignFirstResponder()

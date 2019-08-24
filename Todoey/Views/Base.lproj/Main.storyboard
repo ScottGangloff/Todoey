@@ -46,7 +46,7 @@
                         </barButtonItem>
                     </navigationItem>
                     <connections>
-                        <outlet property="searchBar" destination="zyP-5c-CuO" id="5hL-eE-nKd"/>
+                        <outlet property="searchBar" destination="zyP-5c-CuO" id="OE7-PU-H2N"/>
                     </connections>
                 </tableViewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="KQg-e5-fy4" userLabel="First Responder" sceneMemberID="firstResponder"/>
