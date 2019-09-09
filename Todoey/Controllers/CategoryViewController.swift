@@ -7,10 +7,11 @@
 //
 
 import UIKit
-//import CoreData
 import RealmSwift
+import ChameleonFramework
 
-class CategoryViewController: UITableViewController {
+class CategoryViewController: SwipeTableViewController
+ {
 
     let realm = try! Realm()
     
@@ -23,18 +24,32 @@ class CategoryViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        print(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask))
+        
+        tableView.rowHeight = 80
+        
         loadCategories()
+        
+        tableView.separatorStyle = .none
     }
     
     //MARK: - TableView Datasource Methods
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         
-        let cell = tableView.dequeueReusableCell(withIdentifier: "CategoryCell", for: indexPath)
+        let cell = super.tableView(tableView, cellForRowAt: indexPath)
         
-        //If the todoCategories is not nil, get the name of the category. If it is nil, say no categories added
-        cell.textLabel?.text = todoCategories?[indexPath.row].name ?? "No Categories Added"
-        
+        if let category = todoCategories?[indexPath.row]
+        {
+            cell.textLabel?.text = category.name
+            
+            guard let catColorHex = UIColor.init(hexString: category.color) else {fatalError()}
+            
+            cell.backgroundColor = catColorHex
+            
+            cell.textLabel?.textColor = ContrastColorOf(catColorHex, returnFlat: true)
+        }
+
         return cell
     }
     
@@ -71,6 +86,23 @@ class CategoryViewController: UITableViewController {
         tableView.reloadData()
     }
     
+    //MARK : Delete data from swipe
+    override func updateModel(at indexPath: IndexPath) {
+        if let categoryForDeletion = self.todoCategories?[indexPath.row]
+        {
+            do
+            {
+                try self.realm.write {
+                     self.realm.delete(categoryForDeletion)
+                }
+            }
+            catch
+            {
+                print("Error deleting")
+            }
+        }
+    }
+    
     //MARK: - Add New Categories
     
     @IBAction func addButtonPressed(_ sender: UIBarButtonItem) {
@@ -85,6 +117,7 @@ class CategoryViewController: UITableViewController {
             
             newCategory.name = addButtonField.text!
             
+            newCategory.color = UIColor.randomFlat.hexValue()
             //because the Category Array is auto-updating, you never have to append things to it
             //It is done automatically and monitors itself for the changes done to the added object
             
@@ -127,3 +160,5 @@ class CategoryViewController: UITableViewController {
         }
     }
 }
+
+
